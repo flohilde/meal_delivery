@@ -42,8 +42,6 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-[![Product Name Screen Shot][product-screenshot]](https://example.com)
-
 This project implements a general simulation of an on-demand restaurant meal delivery operation based on data from Iowa city, Iowa.
 
 The simulation allows for:
