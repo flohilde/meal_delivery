@@ -45,10 +45,10 @@
 This project implements a general simulation of an on-demand restaurant meal delivery operation based on data from Iowa city, Iowa.
 
 The simulation allows for:
-* Complex routing, e.g., flexible insertion of orders into vehices' routes as well as re-optimization of existing routes
-* Complex scheduling of order preparation in restaurants
-* Single customers order from multiple restaurants at once
-* Customers placing orders to be delivered not immediately but at a specific time in the future
+* Complex routing: flexible insertion of orders into vehices' routes as well as re-optimization of existing routes
+* Complex scheduling: flexible insertion of orders into the preparation queue of restaurants
+* Multi-orders: each customer may order from multiple restaurants at once
+* Pre-orders: Customers may place orders to be delivered not immediately but at a specific time in the future.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
