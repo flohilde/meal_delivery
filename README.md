@@ -50,6 +50,8 @@ The simulation allows for:
 * Multi-orders: each customer may order from multiple restaurants at once
 * Pre-orders: Customers may place orders to be delivered not immediately but at a specific time in the future.
 
+For a documentation of the code, open ./html/meal_delivery/index.html in your browser.
+
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
