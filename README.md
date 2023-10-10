@@ -91,8 +91,6 @@ A simulation can be started by running ./src/main.py
 - [ ] Add feasibility checks for actions
 - [ ] Thoroughly test environment w.r.t. multi-orders and pre-orders.
 
-See the [open issues](https://github.com/othneildrew/Best-README-Template/issues) for a full list of proposed features (and known issues).
-
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
