@@ -363,7 +363,7 @@ class MealDeliveryMDP:
                                 order_time=order_times[i],
                                 expected_delivery_time=order_times[i] + self.service_promise * 60,
                                 restaurant_choice=["r_{}".format(i) for i in np.random.choice(a=self.n_restaurants,
-                                                                                              size=1)])
+                                                                                              size=2, replace=False)])
             self.customers[customer.name] = customer
             self.unknown_requests.append(customer)
 
