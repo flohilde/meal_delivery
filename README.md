@@ -89,9 +89,10 @@ A simulation can be started by running ./src/main.py
 <!-- ROADMAP -->
 ## Roadmap
 
-- [ ] Add feasibility checks for actions
+- [ ] Add feasibility checks for actions.
 - [ ] Thoroughly test environment w.r.t. multi-orders and pre-orders.
-- [ ] Add a render method to visualize states
+- [ ] Add a render method to visualize states.
+- [ ] Add individual choice behaviors for customers based on state observations.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
