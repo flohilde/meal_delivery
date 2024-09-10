@@ -38,25 +38,14 @@ class Stop:
         List of orders to pick up at the restaurant if the stop type is 'pickup'. Else, None.
     """
 
-    def __init__(self, stop_type: str, destination: int, restaurant_id: str or None, customer_id: str or None,
-                 start_at: int, estimated_travel_time: int, actual_travel_time: int, estimated_park_time: int,
-                 actual_park_time: int, estimated_wait_time: int, actual_wait_time: int,
-                 orders_to_pickup: list or None):
-        assert stop_type in ["pickup", "delivery", "relocation"]
-        if stop_type == "pickup":
-            assert orders_to_pickup is not None and orders_to_pickup
-            assert restaurant_id is not None
-            assert customer_id is None
-        elif stop_type == "delivery":
-            assert estimated_wait_time == actual_wait_time == 0
-            assert restaurant_id is None
-            assert customer_id is not None
-        else:
-            assert estimated_wait_time == actual_wait_time == 0
-            assert restaurant_id is None
-            assert customer_id is None
+    def __init__(self, stop_type: str, origin: int, destination: int, restaurant_id: str or None, customer_id: str or None,
+                 start_at: int, estimated_travel_time: int or None, actual_travel_time: int or None,
+                 estimated_park_time: int or None, actual_park_time: int or None, estimated_wait_time: int or None,
+                 actual_wait_time: int or None, orders_to_pickup: list or None, eta: int or None):
 
+        assert stop_type in ["pickup", "delivery", "relocation"]
         self.type = stop_type
+        self.origin = origin
         self.destination = destination
         self.customer_id = customer_id
         self.restaurant_id = restaurant_id
@@ -69,6 +58,7 @@ class Stop:
         self.estimated_wait_time = estimated_wait_time
         self.actual_wait_time = actual_wait_time
         self.orders_to_pickup = orders_to_pickup
+        self.eta = eta
 
     @property
     def estimated_total_time(self):
@@ -91,12 +81,14 @@ class Stop:
         Returns a summary of the vehicle as a dictionary. Only information that is known by the platform is contained.
         """
         return {"type": self.type,
+                "origin": self.origin,
                 "destination": self.destination,
                 "restaurant_id": self.restaurant_id,
                 "customer_id": self.customer_id,
                 "start_at": self.start_at,
                 "started_at": self.started_at,
                 "estimated_time_required": self.estimated_total_time,
+                "eta": self.eta,
                 "orders_to_pickup": self.orders_to_pickup}
 
 
@@ -166,6 +158,9 @@ class Vehicle:
                 if stop.type == "delivery":
                     delivered[stop.customer_id] = [(r_id, _time) for (r_id, c_id) in self.orders_in_backpack
                                                    if c_id == stop.customer_id]
+                # if it was the last stop in the route, we update the vehicles idle location
+                if not self.sequence_of_stops:
+                    self.location = stop.destination
         return picked_up, delivered
 
     def estimated_busy_time(self, current_time: int) -> int:

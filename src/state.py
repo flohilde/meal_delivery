@@ -1,11 +1,14 @@
 from src.customer import Customer
 from src.restaurant import Restaurant, Order
 from src.vehicle import Vehicle, Stop
-from src.templates import VehicleAction, Action, Observation
+from src.templates import Observation
 import numpy as np
 import simplejson as json
 from typing import Tuple, Dict
 
+
+# TODO: Write load and write-out methods!
+# TODO: Create demand distributions based on Ulmer et al, Hildebrandt et al, Hildebrandt et al, Mao et al.
 
 class MealDeliveryMDP:
     """
@@ -124,6 +127,8 @@ class MealDeliveryMDP:
         self.n_lunch_sigma = config.getfloat("CUSTOMERS", "N_LUNCH_SIGMA")  # variance in number of lunch orders
         self.n_dinner_mu = config.getfloat("CUSTOMERS", "N_DINNER_MU")  # mean number of dinner orders
         self.n_dinner_sigma = config.getfloat("CUSTOMERS", "N_DINNER_SIGMA")  # variance in number of dinner orders
+        self.multi_order_n = config.getint("CUSTOMERS", "MULTI_ORDER_BINOM_N")  # max number of chosen restaurant
+        self.multi_order_p = config.getfloat("CUSTOMERS", "MULTI_ORDER_BINOM_P")  # probability of additional restaurant
         self.service_promise = config.getfloat("CUSTOMERS", "SERVICE_PROMISE")  # allowed delivery time
         self.endogenous_choice = config.getboolean("CUSTOMERS", "ENDOGENOUS_CHOICE")  # allowed delivery time
 
@@ -161,6 +166,13 @@ class MealDeliveryMDP:
         r"""
         Returns true if all customers are served and the time horizon is reached and false, otherwise.
         """
+        if np.any([len(v.sequence_of_stops) == 0 and len(v.orders_in_backpack) != 0 for v in self.vehicles.values()]):
+            print(self.observation)
+            raise Warning("Stuck in Loop.")
+        if self.time > 115200:
+            print(self.observation)
+            raise Warning("Stuck in Loop.")
+
         all_customers = self.unknown_requests + self.open_requests + self.served_requests
         return np.all([customer.status == 1 for customer in all_customers])
 
@@ -198,9 +210,11 @@ class MealDeliveryMDP:
         It could be calculated as the average delay between the earliest and latest delivery
         times for all served customers.
         """
+        multi_order_customers = [customer for customer in self.served_requests
+                                 if len(customer.delivery_time.values()) > 1]
         total_sync_delay = sum([max(customer.delivery_time.values()) - min(customer.delivery_time.values())
-                                for customer in self.served_requests if len(customer.delivery_time.values()) > 1])
-        return total_sync_delay / len(self.served_requests) / 60
+                                for customer in multi_order_customers])
+        return total_sync_delay / len(multi_order_customers) / 60
 
     @property
     def total_revenue(self) -> float:
@@ -217,7 +231,7 @@ class MealDeliveryMDP:
         """
         return sum([v.total_travel_time for v in self.vehicles.values()]) / self.n_vehicles / 60
 
-    def step(self, action: Action) -> Tuple[Observation, float, bool, dict]:
+    def step(self, action: Dict) -> Tuple[Observation, float, bool, dict]:
         r"""
         Transition from one state of the MDP to the next according to the action taken and
         the revealed stochastic information.
@@ -269,38 +283,47 @@ class MealDeliveryMDP:
         vehicle_action = action["vehicle_action"]
         restaurant_action = action["restaurant_action"]
 
-        # integrate action into restaurants (restaurants before vehicles as preparation times influence routes)
+        # Update restaurant queues based on current plan
+        # to do so, we first append the orders that are not currently in the restaurant queue.
+        # then, we sort the restaurant queue according to the restaurant action
         for restaurant in [r for r in self.restaurants.values() if r.name in restaurant_action.keys()]:
-            for r_action in restaurant_action[restaurant.name]:
-                # construct Order
-                customer_id, start_at, insertion_index = r_action
-                estimated_preparation_time = self.expected_cook_time
-                actual_preparation_time = self._sample_cook_time()
-                order = Order(customer_id, start_at, estimated_preparation_time, actual_preparation_time)
-                self.placed_orders.append(order)
-                # insert Order
-                restaurant.take_order(insertion_index, order, self.time)
+            old_orders = [o.customer_id for o in restaurant.queue]
+            for order in restaurant_action[restaurant.name]:
+                if order["customer_id"] not in old_orders:
+                    estimated_preparation_time = self.expected_cook_time
+                    actual_preparation_time = self._sample_cook_time()
+                    order = Order(order["customer_id"], order["start_at"], restaurant.name,
+                                  estimated_preparation_time, actual_preparation_time)
+                    self.placed_orders.append(order)
+                    restaurant.queue.append(order)
+            new_prep_sequence = [o["customer_id"] for o in restaurant_action[restaurant.name]]
+            if restaurant.queue:
+                restaurant.reorder_queue(new_prep_sequence, self.time)
 
         # integrate action into vehicles
         for vehicle in [v for v in self.vehicles.values() if v.name in vehicle_action.keys()]:
             # for each vehicle action construct a Stop and insert into vehicle
-            for v_action in vehicle_action[vehicle.name]:
+            new_route = []
+            for _stop in vehicle_action[vehicle.name]:
                 # construct stop from VehicleAction
-                stop = self._construct_stop_from_vehicle_action(vehicle, v_action)
+                stop = self._construct_stop_from_dict(_stop)
+
                 # track that this order has been assigned to a vehicle
                 if stop.type == "pickup":
                     for customer_id in stop.orders_to_pickup:
-                        self.unassigned_orders.remove((customer_id, stop.restaurant_id))
-                # insert stop
-                if v_action.insertion_index == -1:
-                    vehicle.sequence_of_stops.append(stop)
-                else:
-                    vehicle.sequence_of_stops.insert(v_action.insertion_index, stop)
+                        if (customer_id, stop.restaurant_id) in self.unassigned_orders:
+                            self.unassigned_orders.remove((customer_id, stop.restaurant_id))
+
+                # append stop
+                new_route.append(stop)
+
                 # if it is the first stop in the sequence, start it right away
-                if len(vehicle.sequence_of_stops) == 1:
-                    if v_action.start_at <= self.time:
-                        vehicle.sequence_of_stops[0].started_at = self.time
+                if len(vehicle.sequence_of_stops) == 0:
+                    if stop.started_at is None and stop.start_at <= self.time:
+                        new_route[0].started_at = self.time
+
             # repair: adjust travel times and waiting times for all stops in the route after insertion
+            vehicle.sequence_of_stops = new_route
             if vehicle.sequence_of_stops:
                 self._repair_vehicle_route(vehicle)
 
@@ -395,6 +418,33 @@ class MealDeliveryMDP:
 
         return self.observation
 
+    def load(self, file):
+        r"""
+        Set the environment to a new initial state loaded from a file and return the initial observation.
+        """
+        # keep track of day
+        self.day += 1
+
+        # reset everything else
+        self.vehicles = {}
+        self.restaurants = {}
+        self.customers = {}
+        self.time = 0
+        self.open_requests = []
+        self.unknown_requests = []
+        self.served_requests = []
+        self.unassigned_orders = []
+        self.placed_orders = []
+        self.new_customer = None
+
+        # initialize restaurants
+        self._init_restaurants()
+        # initialize vehicles
+        self._init_vehicles()
+
+        # init demand
+        self._init_demand()
+
     def _init_restaurants(self) -> None:
         r"""
         Reset restaurants to have empty queues again. If less than 110 restaurants are considered, i.e., n < 110,
@@ -417,7 +467,7 @@ class MealDeliveryMDP:
         Reset vehicles to their initial position and empty routes.
         """
         for i in range(self.n_vehicles):
-            vehicle_location = int(self.vehicle_location_list[i])
+            vehicle_location = int(self.vehicle_location_list[i % len(self.vehicle_location_list)])
             self.vehicles["v_{}".format(i)] = Vehicle(location=vehicle_location,
                                                       id_number=i)
 
@@ -436,12 +486,14 @@ class MealDeliveryMDP:
 
         # initialize customer requests
         for i, order_time in enumerate(order_times):
+            n_chosen_restaurants = np.random.binomial(self.multi_order_n - 1, self.multi_order_p) + 1
             customer = Customer(id_number=i,
                                 location=np.random.choice(self.locations),
                                 order_time=order_times[i],
                                 expected_delivery_time=order_times[i] + self.service_promise * 60,
-                                restaurant_choice=["r_{}".format(i) for i in np.random.choice(a=self.n_restaurants,
-                                                                                              size=1, replace=False)])
+                                restaurant_choice=["r_{}".format(r_id) for r_id in np.random.choice(a=self.n_restaurants,
+                                                                                              size=n_chosen_restaurants,
+                                                                                              replace=False)])
             self.customers[customer.name] = customer
             self.unknown_requests.append(customer)
 
@@ -467,77 +519,20 @@ class MealDeliveryMDP:
                                                sigma=np.log(self.cook_sigma),
                                                size=None), a_min=0, a_max=None) * 60)
 
-    def _construct_stop_from_vehicle_action(self, vehicle: Vehicle, vehicle_action: VehicleAction) -> Stop:
+    def _construct_stop_from_dict(self, stop_dict: Dict) -> Stop:
         r"""
         Takes a vehicle and a VehicleAction and returns a Stop.
         """
-        destination, start_at, insertion_index, orders_to_pickup, orders_to_deliver = vehicle_action
-        # we must differentiate between relocations, pickups, and deliveries
-        # relocation stop
-        if type(destination) is int:
-            stop_type = "relocation"
-            restaurant_id = None
-            customer_id = None
-            estimated_wait_time = 0
-            actual_wait_time = 0
-            estimated_park_time = self.expected_parking_time
-            actual_park_time = self._sample_parking_time()
-            if not vehicle.sequence_of_stops:
-                origin = vehicle.location
-            else:
-                if insertion_index != -1:
-                    origin = vehicle.sequence_of_stops[insertion_index - 1].destination
-                else:
-                    origin = vehicle.sequence_of_stops[-1].destination
-            actual_travel_time = self._sample_travel_time(origin, destination)
-            estimated_travel_time = actual_travel_time
-        # pickup stop
-        elif destination[0] == "r":
-            stop_type = "pickup"
-            restaurant_id = destination
-            customer_id = None
-            _restaurant = self.restaurants[restaurant_id]
-            destination = _restaurant.location
-            estimated_park_time = self.expected_parking_time
-            actual_park_time = self._sample_parking_time()
-            estimated_wait_time = 0  # we will update this when we update the wait time of all stops
-            actual_wait_time = 0  # we will update this when we update the wait time of all stops
-            if not vehicle.sequence_of_stops:
-                origin = vehicle.location
-            else:
-                if insertion_index != -1:
-                    origin = vehicle.sequence_of_stops[insertion_index - 1].destination
-                else:
-                    origin = vehicle.sequence_of_stops[-1].destination
-            actual_travel_time = self._sample_travel_time(origin, destination)
-            estimated_travel_time = actual_travel_time
-        # delivery stop
-        elif destination[0] == "c":
-            stop_type = "delivery"
-            customer_id = destination
-            restaurant_id = None
-            destination = self.customers[destination].location
-            estimated_wait_time = 0
-            actual_wait_time = 0
-            estimated_park_time = self.expected_parking_time
-            actual_park_time = self._sample_parking_time()
-            if not vehicle.sequence_of_stops:
-                origin = vehicle.location
-            else:
-                if insertion_index != -1:
-                    origin = vehicle.sequence_of_stops[insertion_index - 1].destination
-                else:
-                    origin = vehicle.sequence_of_stops[-1].destination
-            actual_travel_time = self._sample_travel_time(origin, destination)
-            estimated_travel_time = actual_travel_time
-        else:
-            raise Warning("Vehicle action contains invalid destination {}".format(destination))
-        stop = Stop(stop_type, destination, restaurant_id,
-                    customer_id, start_at,
-                    estimated_travel_time, actual_travel_time,
-                    estimated_park_time, actual_park_time,
-                    estimated_wait_time, actual_wait_time,
-                    orders_to_pickup)
+        estimated_parking_time = self.expected_parking_time
+        actual_parking_time = self._sample_parking_time()
+
+        stop = Stop(stop_dict["type"], stop_dict["origin"], stop_dict["destination"], stop_dict["restaurant_id"],
+                    stop_dict["customer_id"], stop_dict["start_at"], 0, 0, estimated_parking_time,
+                    actual_parking_time, 0, 0, stop_dict["orders_to_pickup"], None)
+
+        if stop_dict["started_at"] is not None:
+            stop.started_at = stop_dict["started_at"]
+
         return stop
 
     def _repair_vehicle_route(self, vehicle: Vehicle) -> None:
@@ -551,14 +546,16 @@ class MealDeliveryMDP:
             estimated_time = vehicle.sequence_of_stops[0].started_at
             actual_time = vehicle.sequence_of_stops[0].started_at
         for stop_index, stop in enumerate(vehicle.sequence_of_stops):
+
             # delay planned start of stop if necessary
             if -1 != stop.start_at <= actual_time:
                 stop.start_at = actual_time
+
             # adjust travel time
-            if stop_index != 0:
-                prev_stop = vehicle.sequence_of_stops[stop_index - 1]
-                stop.actual_travel_time = self._sample_travel_time(prev_stop.destination, stop.destination)
-                stop.estimated_travel_time = stop.actual_travel_time
+            stop.actual_travel_time = self._sample_travel_time(stop.origin, stop.destination)
+            stop.estimated_travel_time = stop.actual_travel_time
+
+            # forward current time
             estimated_time = max(stop.start_at, estimated_time) + stop.estimated_travel_time + stop.estimated_park_time
             actual_time = max(stop.start_at, actual_time) + stop.actual_travel_time + stop.actual_park_time
             # for each pickup stop we adjust the wait time
@@ -570,3 +567,4 @@ class MealDeliveryMDP:
                 stop.actual_wait_time = actual_wait_time
                 estimated_time += estimated_wait_time
                 actual_time += actual_wait_time
+            stop.eta = estimated_time

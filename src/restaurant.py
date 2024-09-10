@@ -1,4 +1,5 @@
 import numpy as np
+from typing import List
 
 
 class Order:
@@ -23,6 +24,8 @@ class Order:
         Name of the customer that placed the order.
     start_at : int
         Earliest time at which the preparation process should be started at.
+    restaurant_name : str
+        Name of the restaurant at which the meal was ordered.
     finished_at : int
         Time at which preparation actually finished
     estimated_preparation_time : int
@@ -31,10 +34,10 @@ class Order:
         Actual time to prepare the order assuming the preparation starts now.
     """
 
-    def __init__(self, customer_id, start_at, estimated_preparation_time,
-                 actual_preparation_time):
+    def __init__(self, customer_id, start_at, restaurant_name, estimated_preparation_time, actual_preparation_time):
         self.customer_id = customer_id
         self.start_at = start_at
+        self.restaurant_name = restaurant_name   # Storing the name of the restaurant
         self.finished_at = None
         self.estimated_preparation_time = estimated_preparation_time
         self.actual_preparation_time = actual_preparation_time
@@ -106,31 +109,28 @@ class Restaurant:
             else:
                 break
 
-    def take_order(self, insertion_index: int, order: Order, time: int) -> None:
+    def reorder_queue(self, order_sequence: List[str], time: int) -> None:
         r"""
         Integrates an order into the restaurant by updating queue and time queues.
         """
-        # insert order into queue
-        if insertion_index == -1:
-            self.queue.append(order)
-        else:
-            self.queue.insert(insertion_index, order)
-        # update time queues
-        if len(self.queue) == 1:
-            self.estimated_time_queue.append(time + order.estimated_preparation_time)
-            self.time_queue.append(time + order.actual_preparation_time)
-        else:
-            if insertion_index == -1:
-                self.estimated_time_queue.append(self.estimated_time_queue[-1] + order.estimated_preparation_time)
-                self.time_queue.append(self.time_queue[-1] + order.actual_preparation_time)
-            else:
-                self.estimated_time_queue.insert(insertion_index, self.estimated_time_queue[insertion_index - 1]
-                                                 + order.estimated_preparation_time)
-                self.estimated_time_queue.insert(insertion_index, self.time_queue[insertion_index - 1]
-                                                 + order.actual_preparation_time)
-                for i in range(insertion_index + 1, len(self.queue)):
-                    self.estimated_time_queue[i] += order.estimated_preparation_time
-                    self.time_queue[i] += order.actual_preparation_time
+
+        estimated_time = time
+        if self.time_queue and self.queue[0].start_at < time:
+            time = self.time_queue[0] - self.queue[0].actual_preparation_time
+            estimated_time = self.estimated_time_queue[0] - self.queue[0].estimated_preparation_time
+
+        self.queue = sorted(self.queue, key=lambda d: order_sequence.index(d.customer_id))
+
+        new_time_queue = []
+        new_estimated_time_queue = []
+        for order in self.queue:
+            time = max(time, order.start_at) + order.actual_preparation_time
+            estimated_time = max(estimated_time, order.start_at) + order.estimated_preparation_time
+            new_time_queue.append(time)
+            new_estimated_time_queue.append(estimated_time)
+
+        self.time_queue = new_time_queue
+        self.estimated_time_queue = new_estimated_time_queue
 
     def sample_random_basket_size(self):
         r"""
