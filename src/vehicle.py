@@ -59,6 +59,10 @@ class Stop:
         self.actual_wait_time = actual_wait_time
         self.orders_to_pickup = orders_to_pickup
         self.eta = eta
+        self.eta_lb = eta
+        self.eta_ub = eta
+        self.order_estimated_ready_time = None
+        self.order_ready_time_sigma = None
 
     @property
     def estimated_total_time(self):
@@ -80,7 +84,8 @@ class Stop:
         r"""
         Returns a summary of the vehicle as a dictionary. Only information that is known by the platform is contained.
         """
-        return {"type": self.type,
+        return {
+                "type": self.type,
                 "origin": self.origin,
                 "destination": self.destination,
                 "restaurant_id": self.restaurant_id,
@@ -89,7 +94,12 @@ class Stop:
                 "started_at": self.started_at,
                 "estimated_time_required": self.estimated_total_time,
                 "eta": self.eta,
-                "orders_to_pickup": self.orders_to_pickup}
+                "eta_lb": self.eta_lb,
+                "eta_ub": self.eta_ub,
+                "orders_to_pickup": self.orders_to_pickup,
+                "order_estimated_ready_time": self.order_estimated_ready_time,
+                "order_ready_time_sigma": self.order_ready_time_sigma,
+        }
 
 
 class Vehicle:
@@ -149,15 +159,23 @@ class Vehicle:
             else:
                 # stop has been visited and is removed
                 stop = self.sequence_of_stops.pop(0)
+                #print("Popping stop")
+                #print(stop.summary())
+
                 self.total_travel_time += stop.actual_travel_time
                 # if pickup stop, we remove the orders from the restaurant's prepared meals
                 if stop.type == "pickup":
                     picked_up[stop.restaurant_id] = stop.orders_to_pickup
                     self.orders_in_backpack.extend([(stop.restaurant_id, c_id) for c_id in stop.orders_to_pickup])
+                    if not stop.orders_to_pickup:
+                        raise Warning("Nothing to pickup from {}.".format(stop.restaurant_id))
+
                 # if delivery stop, we update the customer
                 if stop.type == "delivery":
                     delivered[stop.customer_id] = [(r_id, _time) for (r_id, c_id) in self.orders_in_backpack
                                                    if c_id == stop.customer_id]
+                    if not delivered[stop.customer_id]:
+                        raise Warning("Nothing to deliver to {}.".format(stop.customer_id))
                 # if it was the last stop in the route, we update the vehicles idle location
                 if not self.sequence_of_stops:
                     self.location = stop.destination

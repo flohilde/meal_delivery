@@ -5,11 +5,15 @@ from src.templates import Observation
 import numpy as np
 import simplejson as json
 from typing import Tuple, Dict
+#from scipy.stats import norm
+from scipy.special import ndtr
+
+N = ndtr
+#N = norm(0, 1).cdf
 
 
 # TODO: Write load and write-out methods!
 # TODO: Create demand distributions based on Ulmer et al, Hildebrandt et al, Hildebrandt et al, Mao et al.
-
 class MealDeliveryMDP:
     """
     Implements all elements of the Markov decision process describing an on-demand restaurant meal delivery platform
@@ -99,6 +103,7 @@ class MealDeliveryMDP:
         # load travel time matrix
         with open(config.get("GRAPH", "TT_MATRIX"), 'r') as f:
             self.tt_matrix = json.load(f)  # travel time dict: travel time between pair of nodes
+            # TODO: make it a matrix
 
         # read restaurant parameters
         with open(config.get("RESTAURANTS", "RESTAURANT_LOCATION_FILE"), 'r') as f:
@@ -107,6 +112,8 @@ class MealDeliveryMDP:
         self.cook_mu = config.getfloat("RESTAURANTS", "COOK_TIME_MU")  # mean cook time of a dish
         self.cook_sigma = config.getfloat("RESTAURANTS", "COOK_TIME_SIGMA")  # variance in cook time of a dish
         self.expected_cook_time = int(np.exp(np.log(self.cook_mu) + (np.log(self.cook_sigma) ** 2) / 2) * 60)
+        self.var_cook_time = np.exp(2 * np.log(self.cook_mu)
+                                    + np.log(self.cook_sigma) ** 2) * (np.exp(np.log(self.cook_sigma) ** 2) - 1)
 
         # read vehicle parameters
         with open(config.get("VEHICLES", "VEHICLE_LOCATION_FILE"), 'r') as f:
@@ -359,8 +366,14 @@ class MealDeliveryMDP:
             for customer_id, delivered_orders in delivered.items():
                 customer = self.customers[customer_id]
                 for restaurant_id, time in delivered_orders:
-                    customer.delivery_time[restaurant_id] = time
                     vehicle.orders_in_backpack.remove((restaurant_id, customer_id))
+                    # save some order specific metrics
+                    customer.delivery_time[restaurant_id] = time
+                    customer.delivery_driver[restaurant_id] = vehicle.name
+                    for order in self.placed_orders:
+                        if order.customer_id == customer.name and order.restaurant_name == restaurant_id:
+                            customer.order_prepared_at[restaurant_id] = order.finished_at
+                            break
                 if None not in customer.delivery_time.values():
                     customer.status = 1
                     self.served_requests.append(customer)
@@ -422,6 +435,7 @@ class MealDeliveryMDP:
         r"""
         Set the environment to a new initial state loaded from a file and return the initial observation.
         """
+        raise NotImplementedError
         # keep track of day
         self.day += 1
 
@@ -451,10 +465,10 @@ class MealDeliveryMDP:
         n restaurants are uniformly random sampled from the list of 110 restaurants.
         instance are
         """
-        if self.n_restaurants == 110:
-            restaurant_iterator = range(110)
-        elif self.n_restaurants < 110:
-            restaurant_iterator = np.random.permutation(110)[:self.n_restaurants]
+        if self.n_restaurants == len(self.restaurant_location_list):
+            restaurant_iterator = range(self.n_restaurants)
+        elif self.n_restaurants < len(self.restaurant_location_list):
+            restaurant_iterator = np.random.permutation(len(self.restaurant_location_list))[:self.n_restaurants]
         else:
             raise Warning("Number of restaurant exceeds number of available restaurant for the given instance.")
         for i in restaurant_iterator:
@@ -528,7 +542,7 @@ class MealDeliveryMDP:
 
         stop = Stop(stop_dict["type"], stop_dict["origin"], stop_dict["destination"], stop_dict["restaurant_id"],
                     stop_dict["customer_id"], stop_dict["start_at"], 0, 0, estimated_parking_time,
-                    actual_parking_time, 0, 0, stop_dict["orders_to_pickup"], None)
+                    actual_parking_time, 0, 0, stop_dict["orders_to_pickup"], stop_dict["eta"])
 
         if stop_dict["started_at"] is not None:
             stop.started_at = stop_dict["started_at"]
@@ -541,9 +555,14 @@ class MealDeliveryMDP:
         into the route.
         """
         estimated_time = self.time  # estimated arrival at stop
+        underestimated_time = self.time
+        overestimated_time = self.time
+
         actual_time = self.time  # actual arrival at stop
         if vehicle.sequence_of_stops[0].started_at is not None:
             estimated_time = vehicle.sequence_of_stops[0].started_at
+            underestimated_time = vehicle.sequence_of_stops[0].started_at
+            overestimated_time = vehicle.sequence_of_stops[0].started_at
             actual_time = vehicle.sequence_of_stops[0].started_at
         for stop_index, stop in enumerate(vehicle.sequence_of_stops):
 
@@ -553,18 +572,68 @@ class MealDeliveryMDP:
 
             # adjust travel time
             stop.actual_travel_time = self._sample_travel_time(stop.origin, stop.destination)
-            stop.estimated_travel_time = stop.actual_travel_time
+            stop.estimated_travel_time = stop.actual_travel_time  # we assume deterministic tt for now
 
             # forward current time
             estimated_time = max(stop.start_at, estimated_time) + stop.estimated_travel_time + stop.estimated_park_time
+            underestimated_time = max(stop.start_at, underestimated_time) + stop.estimated_travel_time + stop.estimated_park_time
+            overestimated_time = max(stop.start_at, overestimated_time) + stop.estimated_travel_time + stop.estimated_park_time
+
             actual_time = max(stop.start_at, actual_time) + stop.actual_travel_time + stop.actual_park_time
             # for each pickup stop we adjust the wait time
             if stop.type == "pickup":
                 restaurant = self.restaurants[stop.restaurant_id]
-                estimated_wait_time = restaurant.get_estimated_waiting_time(stop.orders_to_pickup, estimated_time)
-                actual_wait_time = restaurant.get_actual_waiting_time(stop.orders_to_pickup, actual_time)
-                stop.estimated_wait_time = estimated_wait_time
-                stop.actual_wait_time = actual_wait_time
-                estimated_time += estimated_wait_time
-                actual_time += actual_wait_time
+                stop.estimated_wait_time = restaurant.get_estimated_waiting_time(stop.orders_to_pickup, estimated_time)
+                stop.actual_wait_time = restaurant.get_actual_waiting_time(stop.orders_to_pickup, actual_time)
+                stop.order_estimated_ready_time = restaurant.get_estimated_prep_time(stop.orders_to_pickup)
+                stop.order_ready_time_sigma = np.sqrt((restaurant.get_position_in_queue(stop.orders_to_pickup) + 1)
+                                                      * self.var_cook_time)
+
+                # old underestimation of synch time:
+                #estimated_time += stop.estimated_wait_time
+                estimated_time = estimated_time + stop.estimated_wait_time
+                underestimated_time = underestimated_time + stop.estimated_wait_time
+                overestimated_time = overestimated_time + stop.estimated_wait_time
+
+                # new overestimation of synch time:
+                # https://math.stackexchange.com/questions/3305117/expectation-of-maximum-of-n-i-i-d-random-variables
+                # https://stats.stackexchange.com/questions/511271/moments-of-limited-lognormal-distribution
+
+                if stop.order_estimated_ready_time != 0:
+                    queue_info = self.restaurants[stop.restaurant_id].queue
+                    first_customer_in_queue = queue_info[0].customer_id
+                    queue_start_time = self.customers[first_customer_in_queue].order_time
+                    mean_ready_time = (stop.order_estimated_ready_time - queue_start_time) / 60
+                    sigma_ready_time = stop.order_ready_time_sigma
+                    mu_underlying_normal = np.log(mean_ready_time ** 2 / np.sqrt((sigma_ready_time + mean_ready_time ** 2)))
+                    sigma_sqrd_underlying_normal = np.log((sigma_ready_time ** 2 / (mean_ready_time ** 2)) + 1)
+                    sigma_underlying_normal = np.sqrt(sigma_sqrd_underlying_normal)
+                    if not estimated_time <= queue_start_time:
+
+                        trunc_alpha = (np.log(
+                            (estimated_time - queue_start_time) / 60) - mu_underlying_normal) / sigma_underlying_normal
+                        if N(trunc_alpha) < 1 - 1e-3:
+                            #expectation_truncated_lognormal = np.exp((2 * mu_underlying_normal
+                            #                                          + sigma_sqrd_underlying_normal)
+                            #                                         / 2) * (
+                            #                                              (1 - N(trunc_alpha -
+                            #                                                     sigma_underlying_normal))
+                            #                                              / (1 - N(trunc_alpha)))
+                            #overestimated_time = int(expectation_truncated_lognormal * 60 + queue_start_time)
+                            k_moments_ready_time = [np.exp(k * (2 * mu_underlying_normal +
+                                                                k * sigma_sqrd_underlying_normal) / 2)
+                                                    * ((1 - N(trunc_alpha - sigma_underlying_normal * k))
+                                                       / (1 - N(trunc_alpha)))
+                                                    for k in range(1, 10)]
+                            overestimated_time = int(np.min([np.power(2, 1 / k) * np.power(k_moments_ready_time[k - 1], 1 / k)
+                                                     for k in range(1, 10)]) * 60 + queue_start_time)
+                            estimated_time = (overestimated_time + underestimated_time)/2
+
+                actual_time += stop.actual_wait_time
+                #print(underestimated_time, actual_time, estimated_time)
             stop.eta = estimated_time
+            stop.eta_lb = underestimated_time
+            stop.eta_ub = overestimated_time
+            if stop.type == "delivery":
+                self.customers[stop.customer_id].estimated_delivery_time[vehicle.name] = [stop.eta_lb, stop.eta,
+                                                                                          stop.eta_ub]

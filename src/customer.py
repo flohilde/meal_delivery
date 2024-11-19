@@ -43,13 +43,19 @@ class Customer:
         self.expected_delivery_time = expected_delivery_time
         self.restaurant_choice = restaurant_choice
         self.delivery_time = {r_choice: None for r_choice in self.restaurant_choice}
+        self.delivery_driver = {r_choice: None for r_choice in self.restaurant_choice}
+        self.order_prepared_at = {r_choice: None for r_choice in self.restaurant_choice}
+        self.estimated_delivery_time = {}
 
     def summary(self) -> dict:
         r"""
         Returns a summary of the customer as a dictionary.
         """
-        return {"name": self.name,
+        return {
+                "name": self.name,
                 "location": self.location,
                 "order_time": self.order_time,
                 "expected_delivery_time": self.expected_delivery_time,
-                "restaurant_choice": self.restaurant_choice}
+                "restaurant_choice": self.restaurant_choice,
+                "estimated_delivery_time": self.estimated_delivery_time,
+                }

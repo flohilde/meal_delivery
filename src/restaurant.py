@@ -150,13 +150,28 @@ class Restaurant:
 
     def get_estimated_waiting_time(self, orders: list, time: int) -> float:
         r"""
-        Returns the exact (not estimated) waiting time (in seconds) until a given list of orders is finished.
+        Returns the estimated waiting time (in seconds) until a given list of orders is finished.
         """
         orders = [order for order in self.queue if (order.customer_id in orders and order not in self.prepared_orders)]
         if len(orders) == 0:
             return 0
         max_index = max([self.queue.index(order) for order in orders])
         return max(0, self.estimated_time_queue[max_index] - time)
+
+    def get_estimated_prep_time(self, orders: list):
+        orders = [order for order in self.queue if (order.customer_id in orders and order not in self.prepared_orders)]
+        if len(orders) == 0:
+            return 0
+        max_index = max([self.queue.index(order) for order in orders])
+        return self.estimated_time_queue[max_index]
+
+    def get_position_in_queue(self, orders: list):
+        orders = [order for order in self.queue if
+                  (order.customer_id in orders and order not in self.prepared_orders)]
+        if len(orders) == 0:
+            return 0
+        max_index = max([self.queue.index(order) for order in orders])
+        return max_index
 
     def summary(self) -> dict:
         r"""
