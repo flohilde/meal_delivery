@@ -1,5 +1,5 @@
 from collections import defaultdict
-from src.templates import RestaurantAction, VehicleAction, Action, Observation, Policy
+from templates import RestaurantAction, VehicleAction, Action, Observation, Policy
 
 
 class SimpleAssignmentPolicy(Policy):
@@ -20,6 +20,7 @@ class SimpleAssignmentPolicy(Policy):
         """
         action = {"vehicle_action": defaultdict(lambda: []),
                   "restaurant_action": defaultdict(lambda: [])}
+        
         for customer_id, restaurant_id in obs["unassigned_orders"]:
             vehicle_index = sorted(obs["vehicle_info"].keys(),
                                    key=lambda x: obs["vehicle_info"][x]["busy_time"])[0]

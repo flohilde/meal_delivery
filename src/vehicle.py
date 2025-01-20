@@ -93,6 +93,7 @@ class Stop:
                 "restaurant_id": self.restaurant_id,
                 "customer_id": self.customer_id,
                 "start_at": self.start_at,
+                "started_at":self.started_at,
                 "estimated_time_required": self.estimated_total_time,
                 "orders_to_pickup": self.orders_to_pickup}
 
