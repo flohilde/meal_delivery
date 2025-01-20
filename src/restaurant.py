@@ -24,12 +24,16 @@ class Order:
         Estimated time to prepare the order assuming the preparation starts now.
     actual_preparation_time : int
         Actual time to prepare the order assuming the preparation starts now.
+    finished_at : int
+        Time at which preparation actually finished
     """
 
-    def __init__(self, customer_id, start_at, estimated_preparation_time,
+    def __init__(self, customer_id, restaurant_name, start_at, estimated_preparation_time,  # added restaurant_name
                  actual_preparation_time):
         self.customer_id = customer_id
+        self.restaurant_name = restaurant_name   # Storing the name of the restaurant
         self.start_at = start_at
+        self.finished_at = None
         self.estimated_preparation_time = estimated_preparation_time
         self.actual_preparation_time = actual_preparation_time
 
@@ -39,6 +43,7 @@ class Order:
         """
         return {"customer_id": self.customer_id,
                 "start_at": self.start_at,
+                "finished_at": self.finished_at,
                 "estimated_preparation_time": self.estimated_preparation_time}
 
 
@@ -92,6 +97,7 @@ class Restaurant:
                 self.prepared_orders.append(self.queue.pop(index))
                 self.time_queue.pop(index)
                 self.estimated_time_queue.pop(index)
+                self.prepared_orders[-1].finished_at = cook_time
             else:
                 break
 

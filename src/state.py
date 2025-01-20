@@ -1,7 +1,7 @@
-from src.customer import Customer
-from src.restaurant import Restaurant, Order
-from src.vehicle import Vehicle, Stop
-from src.templates import VehicleAction, Action, Observation
+from customer import Customer
+from restaurant import Restaurant, Order
+from vehicle import Vehicle, Stop
+from templates import VehicleAction, Action, Observation
 import numpy as np
 import simplejson as json
 from typing import Tuple
@@ -97,10 +97,12 @@ class MealDeliveryMDP:
         with open(config.get("GRAPH", "TT_MATRIX"), 'r') as f:
             self.tt_matrix = json.load(f)  # travel time dict: travel time between pair of nodes
 
+        
         # read restaurant parameters
-        with open(config.get("RESTAURANTS", "RESTAURANT_LOCATION_FILE"), 'r') as f:
-            self.restaurant_location_list = json.load(f)  # locations of restaurants
         self.n_restaurants = config.getint("RESTAURANTS", "N_RESTAURANTS")  # number of restaurants
+        with open(config.get("RESTAURANTS", "RESTAURANT_LOCATION_FILE"), 'r') as f:
+            self.restaurant_location_list = json.load(f)[:self.n_restaurants]  # locations of restaurants
+        #self.n_restaurants = config.getint("RESTAURANTS", "N_RESTAURANTS")  # number of restaurants
         self.cook_mu = config.getfloat("RESTAURANTS", "COOK_TIME_MU")  # mean cook time of a dish
         self.cook_sigma = config.getfloat("RESTAURANTS", "COOK_TIME_SIGMA")  # variance in cook time of a dish
         self.expected_cook_time = int(np.exp(np.log(self.cook_mu) + (np.log(self.cook_sigma) ** 2) / 2) * 60)
@@ -137,6 +139,7 @@ class MealDeliveryMDP:
         self.known_requests = None  # list of revealed but not served customers
         self.served_requests = None  # list of revealed and served requests
         self.unassigned_orders = None
+        self.placed_orders = None # list of all the orders placed 
 
     @property
     def observation(self) -> Observation:
@@ -166,6 +169,40 @@ class MealDeliveryMDP:
         """
         return sum([max(0, max(customer.delivery_time.values()) - customer.expected_delivery_time)
                     for customer in self.served_requests]) / len(self.served_requests) / 60
+
+    @property
+    def mean_freshness(self) -> float:
+        total_freshness = 0
+        total_delivered_orders = 0
+
+        for customer in self.served_requests:
+            for restaurant_name in customer.restaurant_choice:
+                delivery_time = customer.delivery_time.get(restaurant_name)
+                if delivery_time is not None:
+                    for order in self.placed_orders:  
+                        if order.customer_id == customer.name and order.restaurant_name == restaurant_name:  
+                            #preparation_end_time = order.start_at + order.actual_preparation_time
+                            freshness = delivery_time - order.finished_at
+                            #print(delivery_time, customer.order_time, preparation_end_time)
+                            total_freshness += max(freshness, 0)
+                            total_delivered_orders += 1
+                            break
+
+        return (total_freshness / max(total_delivered_orders, 1)) / 60 if total_delivered_orders > 0 else 0
+    
+
+
+    @property
+    def mean_sync_delay(self) -> float:
+        r"""
+        Returns the mean synchronization delay, representing how well the deliveries are synchronized.
+        It could be calculated as the average delay between the earliest and latest delivery
+        times for all served customers.
+        """
+        total_sync_delay = sum([max(customer.delivery_time.values()) - min(customer.delivery_time.values())
+                                for customer in self.served_requests if len(customer.delivery_time.values()) > 1])
+        return total_sync_delay / len(self.served_requests) / 60
+
 
     def step(self, action: Action) -> Tuple[Observation, float, bool, dict]:
         r"""
@@ -222,11 +259,13 @@ class MealDeliveryMDP:
         # integrate action into restaurants (restaurants before vehicles as preparation times influence routes)
         for restaurant in [r for r in self.restaurants.values() if r.name in restaurant_action.keys()]:
             for r_action in restaurant_action[restaurant.name]:
+            #for r_action in restaurant_action.get(restaurant.name, []): # a change here
                 # construct Order
                 customer_id, start_at, insertion_index = r_action
                 estimated_preparation_time = self.expected_cook_time
                 actual_preparation_time = self._sample_cook_time()
-                order = Order(customer_id, start_at, estimated_preparation_time, actual_preparation_time)
+                order = Order(customer_id, restaurant.name, start_at, estimated_preparation_time, actual_preparation_time)  # added restaurant_name
+                self.placed_orders.append(order)
                 # insert Order
                 restaurant.take_order(insertion_index, order, self.time)
 
@@ -286,7 +325,14 @@ class MealDeliveryMDP:
                 if None not in customer.delivery_time.values():
                     customer.status = 1
                     self.served_requests.append(customer)
-                    self.known_requests.remove(customer)
+                    #self.known_requests.remove(customer)
+                    #Check if the customer is removed more than once by adding a check before removing:
+                    # ValueError: list.remove(x): x not in list -- handel this error
+                    if customer in self.known_requests:
+                        self.known_requests.remove(customer)
+                    else:
+                        print(f"Attempted to remove a non-existent customer: {customer}") 
+
 
         return self.observation, cost, self.done, {}
 
@@ -306,7 +352,7 @@ class MealDeliveryMDP:
         self.unknown_requests = []
         self.served_requests = []
         self.unassigned_orders = []
-
+        self.placed_orders = []
         # initialize restaurants
         self._init_restaurants()
         # initialize vehicles
@@ -323,12 +369,13 @@ class MealDeliveryMDP:
         n restaurants are uniformly random sampled from the list of 110 restaurants.
         instance are
         """
-        if self.n_restaurants == 110:
-            restaurant_iterator = range(110)
-        elif self.n_restaurants < 110:
-            restaurant_iterator = np.random.permutation(110)[:self.n_restaurants]
-        else:
-            raise Warning("Number of restaurant exceeds number of available restaurant for the given instance.")
+        # if self.n_restaurants == 110:
+        #     restaurant_iterator = range(110)
+        # elif self.n_restaurants < 110:
+        #     restaurant_iterator = np.random.permutation(110)[:self.n_restaurants]
+        # else:
+        #     raise Warning("Number of restaurant exceeds number of available restaurant for the given instance.")
+        restaurant_iterator = range(self.n_restaurants)
         for i in restaurant_iterator:
             restaurant_location = int(self.restaurant_location_list[i])
             self.restaurants["r_{}".format(i)] = Restaurant(location=restaurant_location,
@@ -358,12 +405,13 @@ class MealDeliveryMDP:
 
         # initialize customer requests
         for i, order_time in enumerate(order_times):
+            number_orders = np.random.binomial(2, 1/3) + 1
             customer = Customer(id_number=i,
                                 location=np.random.choice(self.locations),
-                                order_time=order_times[i],
+                                order_time=order_time,
                                 expected_delivery_time=order_times[i] + self.service_promise * 60,
                                 restaurant_choice=["r_{}".format(i) for i in np.random.choice(a=self.n_restaurants,
-                                                                                              size=2, replace=False)])
+                                                                                              size=number_orders, replace=False)]) ## to only make onl certain % multi order
             self.customers[customer.name] = customer
             self.unknown_requests.append(customer)
 
