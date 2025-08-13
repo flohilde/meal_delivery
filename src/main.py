@@ -114,8 +114,8 @@ if __name__ == "__main__":
                             #    config.set('RESTAURANTS', 'COOK_TIME_SIGMA', str(sigma))
                             config.set('CUSTOMERS', 'MULTI_ORDER_BINOM_P', str(p))
                             config.set('CUSTOMERS', 'N_LUNCH_MU', str(demand))
-                            config.set('CUSTOMERS', 'N_LUNCH_SIGMA', str(demand))
-                            config.set('CUSTOMERS', 'N_DINNER_MU', str(np.sqrt(demand)))
+                            config.set('CUSTOMERS', 'N_LUNCH_SIGMA', str(np.sqrt(demand)))
+                            config.set('CUSTOMERS', 'N_DINNER_MU', str(demand))
                             config.set('CUSTOMERS', 'N_DINNER_SIGMA', str(np.sqrt(demand)))
 
                             run(config, n_episodes=100, weights=weights, buffer=buffer * 60, mode=mode, force_synchro=force_synchro)
