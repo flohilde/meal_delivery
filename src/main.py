@@ -72,12 +72,15 @@ def run(config, n_episodes=1, weights=[1.0, 1.0, 1.0], buffer=0, mode="ulmer", f
                 print("Episode; {}; Mean delay; {}; Mean freshness; {}; Mean Sync-Delay; {}".format(*summary))
                 break
     results = np.array(results, dtype=float)
-    np.save("../results/iowa_40_40_240_240_n_{}_p_{}_alpha_{}_beta_{}_gamma_{}_forcesync_{}_buffer_{}_mode_{}_sorted".format(env.multi_order_n,
+    np.save("../results/demand/iowa_40_40_{]_{}_n_{}_p_{}_alpha_{}_beta_{}_gamma_{}_forcesync_{}_buffer_{}_mode_{}_sorted".format(
+                                                                                                         int(env.n_lunch_mu),
+                                                                                                         int(env.n_dinner_mu),
+                                                                                                         env.multi_order_n,
                                                                                                          str(env.multi_order_p).replace(".", "_"),
                                                                                                          str(weights[0]).replace(".", "_"), 
                                                                                                          str(weights[1]).replace(".", "_"),
                                                                                                          str(weights[2]).replace(".", "_"),
-                                                                                                         int(int(force_synchro)),  
+                                                                                                         int(force_synchro),
                                                                                                          buffer, mode), 
                                                                                                          results)
 
@@ -87,30 +90,35 @@ if __name__ == "__main__":
     config = configparser.ConfigParser(allow_no_value=True)
     config.read('../data/instances/multi_order/iowa_40_40_240_240.ini')
 
-    for p in [0.15, 0.2, 0.25]:
-        for weights in [[1.0, 1.0, 0.25]]:
-        #for alpha in [1.0]:
-            #for buffer in list(range(0, 12, 2)):
-            for buffer in [0]:
-                for mode in ["ulmer"]:
-                #for mode in ["ub"]:
-                #for mode in ["triangular"]:
-                #for mode in ["uniform"]:
-                    for force_synchro in [False]:
-                        #for (mu, sigma, perc) in [(7.9400412461595264, 1.5274705710772243, 10),
-                        #                    (7.881410739124781, 1.5538909474195441, 20),
-                        #                    (7.824060151812124, 1.579378640155617, 30),
-                        #                    (7.76794358351971, 1.6040294814535416, 40),
-                        #                    (7.713017405512268, 1.6279229283249443, 50),
-                        #                    (7.659240118449287, 1.6511257998517854, 60),
-                        #                    (7.606572220597797, 1.6736949794094307, 70),
-                        #                    (7.5549760858787165, 1.6956794125111876, 80),
-                        #                    (7.504415850891277, 1.717121612830398, 90),
-                        #                    (7.454857310144586, 1.7380588170291, 100)]:
-                        #    config.set('RESTAURANTS', 'COOK_TIME_MU', str(mu))
-                        #    config.set('RESTAURANTS', 'COOK_TIME_SIGMA', str(sigma))
-                        config.set('CUSTOMERS', 'MULTI_ORDER_BINOM_P', str(p))
-                        run(config, n_episodes=100, weights=weights, buffer=buffer * 60, mode=mode, force_synchro=force_synchro)
+    for p in [0.15]:
+        for weights in [[1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [1.0, 0.0, 0.25]]:
+            for demand in range(250, 370, 10):
+                #for buffer in list(range(0, 12, 2)):
+                for buffer in [0]:
+                    for mode in ["ulmer"]:
+                    #for mode in ["ub"]:
+                    #for mode in ["triangular"]:
+                    #for mode in ["uniform"]:
+                        for force_synchro in [False]:
+                            #for (mu, sigma, perc) in [(7.9400412461595264, 1.5274705710772243, 10),
+                            #                    (7.881410739124781, 1.5538909474195441, 20),
+                            #                    (7.824060151812124, 1.579378640155617, 30),
+                            #                    (7.76794358351971, 1.6040294814535416, 40),
+                            #                    (7.713017405512268, 1.6279229283249443, 50),
+                            #                    (7.659240118449287, 1.6511257998517854, 60),
+                            #                    (7.606572220597797, 1.6736949794094307, 70),
+                            #                    (7.5549760858787165, 1.6956794125111876, 80),
+                            #                    (7.504415850891277, 1.717121612830398, 90),
+                            #                    (7.454857310144586, 1.7380588170291, 100)]:
+                            #    config.set('RESTAURANTS', 'COOK_TIME_MU', str(mu))
+                            #    config.set('RESTAURANTS', 'COOK_TIME_SIGMA', str(sigma))
+                            config.set('CUSTOMERS', 'MULTI_ORDER_BINOM_P', str(p))
+                            config.set('CUSTOMERS', 'N_LUNCH_MU', str(demand))
+                            config.set('CUSTOMERS', 'N_LUNCH_SIGMA', str(demand))
+                            config.set('CUSTOMERS', 'N_DINNER_MU', str(np.sqrt(demand)))
+                            config.set('CUSTOMERS', 'N_DINNER_SIGMA', str(np.sqrt(demand)))
+
+                            run(config, n_episodes=100, weights=weights, buffer=buffer * 60, mode=mode, force_synchro=force_synchro)
 
 
     #import pstats
