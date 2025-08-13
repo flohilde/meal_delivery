@@ -1,18 +1,18 @@
-from src.state import MealDeliveryMDP
-from src.policies.fleet_control.simple_assignment import SimpleAssignmentPolicy
-from src.policies.fleet_control.lns import LNS
-from src.policies.demand_control.simple_proximity import SimpleProximityDemandControl
-from src.policies.demand_control.customer_choice_models import simple_customer_choice
+from state import MealDeliveryMDP
+from policies.fleet_control.simple_assignment import SimpleAssignmentPolicy
+from policies.fleet_control.lns import LNS
+from policies.demand_control.simple_proximity import SimpleProximityDemandControl
+from policies.demand_control.customer_choice_models import simple_customer_choice
 import configparser
 import numpy as np
 
 
-def run(config, n_episodes=1, alpha=1.0, buffer=0, synchro_tol=0):
+def run(config, n_episodes=1, weights=[1.0, 1.0, 1.0], buffer=0, mode="ulmer", force_synchro=False):
     env = MealDeliveryMDP(config, seed=42)
     env.endogenous_choice = False
     # policy = SimpleAssignmentPolicy(env.tt_matrix, env.expected_parking_time, env.expected_cook_time)
     policy = LNS(env.tt_matrix, env.expected_parking_time, env.expected_cook_time, env.var_cook_time,
-                 alpha=alpha, buffer=buffer, synchro_tol=synchro_tol)
+                 weights=weights, buffer=buffer, mode=mode, force_synchro=force_synchro)
     demand_policy = SimpleProximityDemandControl(proximity=[10 * 60] * 110,
                                                  restaurant_nodes=env.restaurant_location_list,
                                                  tt_matrix=env.tt_matrix)
@@ -42,8 +42,8 @@ def run(config, n_episodes=1, alpha=1.0, buffer=0, synchro_tol=0):
                 action = policy.act(obs)
                 obs, cost, done, info = env.step(action)
             except Exception as e:
-                print(action)
-                print(obs)
+                #print(action)
+                #print(obs)
                 raise e
 
             if done:
@@ -72,38 +72,45 @@ def run(config, n_episodes=1, alpha=1.0, buffer=0, synchro_tol=0):
                 print("Episode; {}; Mean delay; {}; Mean freshness; {}; Mean Sync-Delay; {}".format(*summary))
                 break
     results = np.array(results, dtype=float)
-    np.save("../results/iowa_110_5_80_80_n_{}_p_{}_alpha_{}_buffer_{}_synchrotol_{}".format(env.multi_order_n,
-                                                                                            str(env.multi_order_p).replace(
-                                                                                                ".", "_"),
-                                                                                            str(alpha).replace(".",
-                                                                                                               "_"),
-                                                                                            buffer,
-                                                                                            str(synchro_tol).replace(
-                                                                                                ".", "_")),
-            results)
+    np.save("../results/iowa_40_40_240_240_n_{}_p_{}_alpha_{}_beta_{}_gamma_{}_forcesync_{}_buffer_{}_mode_{}_sorted".format(env.multi_order_n,
+                                                                                                         str(env.multi_order_p).replace(".", "_"),
+                                                                                                         str(weights[0]).replace(".", "_"), 
+                                                                                                         str(weights[1]).replace(".", "_"),
+                                                                                                         str(weights[2]).replace(".", "_"),
+                                                                                                         int(int(force_synchro)),  
+                                                                                                         buffer, mode), 
+                                                                                                         results)
 
 
 if __name__ == "__main__":
 
     config = configparser.ConfigParser(allow_no_value=True)
-    config.read('../data/instances/multi_order/iowa_110_20_320_320.ini')
+    config.read('../data/instances/multi_order/iowa_40_40_240_240.ini')
 
-    for p in [0.1]:
-        for alpha in [0.2]:
-            #for buffer in list(range(2, 12, 2)):
-            for buffer in [10]:
-                #for synchro_tol in [0.5, 1, 1.5, 2.0]:
-                for synchro_tol in [-2]:
-                    #for (mu, sigma, perc) in [(7.9400412461595264, 1.5274705710772243, 10),
-                    #                    (7.881410739124781, 1.5538909474195441, 20),
-                    #                    (7.824060151812124, 1.579378640155617, 30),
-                    #                    (7.76794358351971, 1.6040294814535416, 40),
-                    #                    (7.713017405512268, 1.,6279229283249443 50)]:
-                        #config.set('CUSTOMERS', 'MULTI_ORDER_BINOM_P', str(p))
-                        #config.set('RESTAURANTS', 'COOK_TIME_MU', str(mu))
-                        #config.set('RESTAURANTS', 'COOK_TIME_SIGMA', str(sigma))
-                    config.set('CUSTOMERS', 'MULTI_ORDER_BINOM_P', str(p))
-                    run(config, n_episodes=100, alpha=alpha, buffer=buffer * 60, synchro_tol=synchro_tol)
+    for p in [0.15, 0.2, 0.25]:
+        for weights in [[1.0, 1.0, 0.25]]:
+        #for alpha in [1.0]:
+            #for buffer in list(range(0, 12, 2)):
+            for buffer in [0]:
+                for mode in ["ulmer"]:
+                #for mode in ["ub"]:
+                #for mode in ["triangular"]:
+                #for mode in ["uniform"]:
+                    for force_synchro in [False]:
+                        #for (mu, sigma, perc) in [(7.9400412461595264, 1.5274705710772243, 10),
+                        #                    (7.881410739124781, 1.5538909474195441, 20),
+                        #                    (7.824060151812124, 1.579378640155617, 30),
+                        #                    (7.76794358351971, 1.6040294814535416, 40),
+                        #                    (7.713017405512268, 1.6279229283249443, 50),
+                        #                    (7.659240118449287, 1.6511257998517854, 60),
+                        #                    (7.606572220597797, 1.6736949794094307, 70),
+                        #                    (7.5549760858787165, 1.6956794125111876, 80),
+                        #                    (7.504415850891277, 1.717121612830398, 90),
+                        #                    (7.454857310144586, 1.7380588170291, 100)]:
+                        #    config.set('RESTAURANTS', 'COOK_TIME_MU', str(mu))
+                        #    config.set('RESTAURANTS', 'COOK_TIME_SIGMA', str(sigma))
+                        config.set('CUSTOMERS', 'MULTI_ORDER_BINOM_P', str(p))
+                        run(config, n_episodes=100, weights=weights, buffer=buffer * 60, mode=mode, force_synchro=force_synchro)
 
 
     #import pstats
