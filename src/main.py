@@ -72,7 +72,7 @@ def run(config, n_episodes=1, weights=[1.0, 1.0, 1.0], buffer=0, mode="ulmer", f
                 print("Episode; {}; Mean delay; {}; Mean freshness; {}; Mean Sync-Delay; {}".format(*summary))
                 break
     results = np.array(results, dtype=float)
-    np.save("../results/demand/iowa_40_40_{]_{}_n_{}_p_{}_alpha_{}_beta_{}_gamma_{}_forcesync_{}_buffer_{}_mode_{}_sorted".format(
+    np.save("../results/demand/iowa_40_40_{}_{}_n_{}_p_{}_alpha_{}_beta_{}_gamma_{}_forcesync_{}_buffer_{}_mode_{}_sorted".format(
                                                                                                          int(env.n_lunch_mu),
                                                                                                          int(env.n_dinner_mu),
                                                                                                          env.multi_order_n,
