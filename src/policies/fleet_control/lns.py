@@ -1,8 +1,8 @@
 import numpy as np
-from src.templates import Policy, Observation
+from templates import Policy, Observation
 from typing import Dict, List
 import copy
-from src.utils import route_to_array, array_to_route
+from utils import route_to_array, array_to_route
 # from scipy.stats import norm
 from scipy.special import ndtr
 

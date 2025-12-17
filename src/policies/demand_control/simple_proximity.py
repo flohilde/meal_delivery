@@ -1,5 +1,5 @@
 from typing import List, Dict, Union
-from src.templates import DemandPolicy, Observation
+from templates import DemandPolicy, Observation
 
 
 def restaurant_proximity_filter(proximity: Union[float, List[float]], customer_node: int, restaurant_nodes: List[int],

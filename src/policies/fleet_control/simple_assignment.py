@@ -1,6 +1,6 @@
 import copy
 from typing import Dict
-from src.templates import Observation, Policy
+from templates import Observation, Policy
 import itertools
 import operator
 import numpy as np

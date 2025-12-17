@@ -1,7 +1,7 @@
-from src.customer import Customer
-from src.restaurant import Restaurant, Order
-from src.vehicle import Vehicle, Stop
-from src.templates import Observation
+from customer import Customer
+from restaurant import Restaurant, Order
+from vehicle import Vehicle, Stop
+from templates import Observation
 import numpy as np
 import simplejson as json
 from typing import Tuple, Dict
