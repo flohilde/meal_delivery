@@ -58,4 +58,5 @@ class Customer:
                 "expected_delivery_time": self.expected_delivery_time,
                 "restaurant_choice": self.restaurant_choice,
                 "estimated_delivery_time": self.estimated_delivery_time,
+                "order_prepared_at": self.order_prepared_at,
                 }
