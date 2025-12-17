@@ -5,11 +5,10 @@ from templates import Observation
 import numpy as np
 import simplejson as json
 from typing import Tuple, Dict
-#from scipy.stats import norm
+import itertools
 from scipy.special import ndtr
 
 N = ndtr
-#N = norm(0, 1).cdf
 
 
 # TODO: Write load and write-out methods!
@@ -150,7 +149,7 @@ class MealDeliveryMDP:
         self.open_requests = None  # list of revealed but not served customers
         self.served_requests = None  # list of revealed and served requests
         self.unassigned_orders = None  # list of (customer namen restaurant ids that have not been assigned
-        self.placed_orders = None # list of all the orders placed (customers may place multiple orders)
+        self.placed_orders = None  # list of all the orders placed (customers may place multiple orders)
         self.new_customer = None  # customer that has not chosen a restaurant (important for demand control)
 
     @property
@@ -189,8 +188,14 @@ class MealDeliveryMDP:
         Returns the mean delay (in minutes) of all customers that have been served this day. Delay per customer is
         calculated as the maximum delay over all orders of the customer.
         """
-        return sum([max(0, max(customer.delivery_time.values()) - customer.expected_delivery_time)
-                    for customer in self.served_requests]) / len(self.served_requests) / 60
+        total_delay = 0
+        total_deliveries = 0
+        for customer in self.served_requests:
+            for dt in customer.delivery_time.values():
+                total_delay += max(0, dt - customer.expected_delivery_time)
+                total_deliveries += 1
+
+        return (total_delay / total_deliveries) / 60
 
     @property
     def mean_freshness(self) -> float:
@@ -363,6 +368,7 @@ class MealDeliveryMDP:
                 restaurant = self.restaurants[restaurant_id]
                 vehicle.backpack_full_info.extend([order for order in restaurant.prepared_orders
                                                    if order.customer_id in picked_up_orders])
+
                 restaurant.prepared_orders = [order for order in restaurant.prepared_orders
                                               if order.customer_id not in picked_up_orders]
             for customer_id, delivered_orders in delivered.items():
@@ -504,14 +510,26 @@ class MealDeliveryMDP:
 
         # initialize customer requests
         for i, order_time in enumerate(order_times):
+            c_location = np.random.choice(self.locations)
             n_chosen_restaurants = np.random.binomial(self.multi_order_n - 1, self.multi_order_p) + 1
+            chosen_restaurants = ["r_{}".format(r_id) for r_id in
+                                  np.random.choice(a=self.n_restaurants, size=n_chosen_restaurants, replace=False)]
+            # sort restaurants by optimal tsp tour
+            if len(chosen_restaurants) > 1:
+                proximity = 1e6
+                for rests_perm in list(itertools.permutations(chosen_restaurants)):
+                    _proximity = np.sum([self._sample_travel_time(self.restaurants[rests_perm[i]].location,
+                                                                  self.restaurants[rests_perm[i + 1]].location) for i in
+                                         range(len(rests_perm) - 1)])
+                    _proximity += self._sample_travel_time(self.restaurants[rests_perm[-1]].location, c_location)
+                    if _proximity < proximity:
+                        proximity = _proximity
+                        chosen_restaurants = rests_perm
             customer = Customer(id_number=i,
-                                location=np.random.choice(self.locations),
+                                location=c_location,
                                 order_time=order_times[i],
                                 expected_delivery_time=order_times[i] + self.service_promise * 60,
-                                restaurant_choice=["r_{}".format(r_id) for r_id in np.random.choice(a=self.n_restaurants,
-                                                                                              size=n_chosen_restaurants,
-                                                                                              replace=False)])
+                                restaurant_choice=chosen_restaurants)
             self.customers[customer.name] = customer
             self.unknown_requests.append(customer)
 
@@ -519,7 +537,7 @@ class MealDeliveryMDP:
         r"""
         Returns the (deterministic) travel time (in seconds) between origin and destination.
         """
-        return int(self.tt_matrix[str(origin)][str(destination)])
+        return int(self.tt_matrix[str(origin)][str(destination)] * 3)
 
     def _sample_parking_time(self) -> int:
         r"""
@@ -546,7 +564,8 @@ class MealDeliveryMDP:
 
         stop = Stop(stop_dict["type"], stop_dict["origin"], stop_dict["destination"], stop_dict["restaurant_id"],
                     stop_dict["customer_id"], stop_dict["start_at"], 0, 0, estimated_parking_time,
-                    actual_parking_time, 0, 0, stop_dict["orders_to_pickup"], stop_dict["eta"])
+                    actual_parking_time, 0, 0, stop_dict["orders_to_pickup"], stop_dict["orders_ready_time"],
+                    stop_dict["eta"])
 
         if stop_dict["started_at"] is not None:
             stop.started_at = stop_dict["started_at"]
@@ -580,8 +599,10 @@ class MealDeliveryMDP:
 
             # forward current time
             estimated_time = max(stop.start_at, estimated_time) + stop.estimated_travel_time + stop.estimated_park_time
-            underestimated_time = max(stop.start_at, underestimated_time) + stop.estimated_travel_time + stop.estimated_park_time
-            overestimated_time = max(stop.start_at, overestimated_time) + stop.estimated_travel_time + stop.estimated_park_time
+            underestimated_time = max(stop.start_at,
+                                      underestimated_time) + stop.estimated_travel_time + stop.estimated_park_time
+            overestimated_time = max(stop.start_at,
+                                     overestimated_time) + stop.estimated_travel_time + stop.estimated_park_time
 
             actual_time = max(stop.start_at, actual_time) + stop.actual_travel_time + stop.actual_park_time
             # for each pickup stop we adjust the wait time
@@ -594,7 +615,7 @@ class MealDeliveryMDP:
                                                       * self.var_cook_time)
 
                 # old underestimation of synch time:
-                #estimated_time += stop.estimated_wait_time
+                # estimated_time += stop.estimated_wait_time
                 estimated_time = estimated_time + stop.estimated_wait_time
                 underestimated_time = underestimated_time + stop.estimated_wait_time
                 overestimated_time = overestimated_time + stop.estimated_wait_time
@@ -609,7 +630,8 @@ class MealDeliveryMDP:
                     queue_start_time = self.customers[first_customer_in_queue].order_time
                     mean_ready_time = (stop.order_estimated_ready_time - queue_start_time) / 60
                     sigma_ready_time = stop.order_ready_time_sigma
-                    mu_underlying_normal = np.log(mean_ready_time ** 2 / np.sqrt((sigma_ready_time + mean_ready_time ** 2)))
+                    mu_underlying_normal = np.log(
+                        mean_ready_time ** 2 / np.sqrt((sigma_ready_time + mean_ready_time ** 2)))
                     sigma_sqrd_underlying_normal = np.log((sigma_ready_time ** 2 / (mean_ready_time ** 2)) + 1)
                     sigma_underlying_normal = np.sqrt(sigma_sqrd_underlying_normal)
                     if not estimated_time <= queue_start_time:
@@ -617,24 +639,25 @@ class MealDeliveryMDP:
                         trunc_alpha = (np.log(
                             (estimated_time - queue_start_time) / 60) - mu_underlying_normal) / sigma_underlying_normal
                         if N(trunc_alpha) < 1 - 1e-3:
-                            #expectation_truncated_lognormal = np.exp((2 * mu_underlying_normal
+                            # expectation_truncated_lognormal = np.exp((2 * mu_underlying_normal
                             #                                          + sigma_sqrd_underlying_normal)
                             #                                         / 2) * (
                             #                                              (1 - N(trunc_alpha -
                             #                                                     sigma_underlying_normal))
                             #                                              / (1 - N(trunc_alpha)))
-                            #overestimated_time = int(expectation_truncated_lognormal * 60 + queue_start_time)
+                            # overestimated_time = int(expectation_truncated_lognormal * 60 + queue_start_time)
                             k_moments_ready_time = [np.exp(k * (2 * mu_underlying_normal +
                                                                 k * sigma_sqrd_underlying_normal) / 2)
                                                     * ((1 - N(trunc_alpha - sigma_underlying_normal * k))
                                                        / (1 - N(trunc_alpha)))
                                                     for k in range(1, 10)]
-                            overestimated_time = int(np.min([np.power(2, 1 / k) * np.power(k_moments_ready_time[k - 1], 1 / k)
-                                                     for k in range(1, 10)]) * 60 + queue_start_time)
-                            estimated_time = (overestimated_time + underestimated_time)/2
+                            overestimated_time = int(
+                                np.min([np.power(2, 1 / k) * np.power(k_moments_ready_time[k - 1], 1 / k)
+                                        for k in range(1, 10)]) * 60 + queue_start_time)
+                            estimated_time = (overestimated_time + underestimated_time) / 2
 
                 actual_time += stop.actual_wait_time
-                #print(underestimated_time, actual_time, estimated_time)
+                # print(underestimated_time, actual_time, estimated_time)
             stop.eta = estimated_time
             stop.eta_lb = underestimated_time
             stop.eta_ub = overestimated_time
