@@ -132,6 +132,7 @@ class Vehicle:
         self.sequence_of_stops = []  # list of stops to visit
         self.orders_in_backpack = []  # list of tuples (customer_id, restaurant_id)
         self.total_travel_time = 0  # compensated travel time of vehicle (driving to pick up or deliver an order)
+        self.total_busy_time = 0
 
     def update(self, time: int) -> Tuple[dict, dict]:
         r"""
@@ -153,6 +154,7 @@ class Vehicle:
                 else:
                     self.sequence_of_stops[0].started_at = _time
             _time = self.sequence_of_stops[0].started_at
+            self.total_busy_time += self.sequence_of_stops[0].actual_total_time
             _time += self.sequence_of_stops[0].actual_total_time
             if _time > time:
                 break
