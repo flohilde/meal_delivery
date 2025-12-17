@@ -361,12 +361,16 @@ class MealDeliveryMDP:
             picked_up, delivered = vehicle.update(self.time)
             for restaurant_id, picked_up_orders in picked_up.items():
                 restaurant = self.restaurants[restaurant_id]
+                vehicle.backpack_full_info.extend([order for order in restaurant.prepared_orders
+                                                   if order.customer_id in picked_up_orders])
                 restaurant.prepared_orders = [order for order in restaurant.prepared_orders
                                               if order.customer_id not in picked_up_orders]
             for customer_id, delivered_orders in delivered.items():
                 customer = self.customers[customer_id]
                 for restaurant_id, time in delivered_orders:
                     vehicle.orders_in_backpack.remove((restaurant_id, customer_id))
+                    vehicle.backpack_full_info = [order for order in vehicle.backpack_full_info
+                                                  if order.customer_id != customer_id]
                     # save some order specific metrics
                     customer.delivery_time[restaurant_id] = time
                     customer.delivery_driver[restaurant_id] = vehicle.name

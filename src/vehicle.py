@@ -131,6 +131,7 @@ class Vehicle:
         self.location = int(location)  # current (or next) idle location of vehicle given by node in the graph
         self.sequence_of_stops = []  # list of stops to visit
         self.orders_in_backpack = []  # list of tuples (customer_id, restaurant_id)
+        self.backpack_full_info = []  # full info of each order in the backpack (should replace orders in backpack but haven't found the time yet)
         self.total_travel_time = 0  # compensated travel time of vehicle (driving to pick up or deliver an order)
         self.total_busy_time = 0
         self.busy_profile = np.zeros(1440)
@@ -203,5 +204,6 @@ class Vehicle:
         """
         return {"next_location": self.location,
                 "orders_in_backpack": self.orders_in_backpack,
+                "orders_in_backpack_full_info": [order.summary() for order in self.backpack_full_info],
                 "sequence_of_actions": [action.summary() for action in self.sequence_of_stops],
                 "busy_time": self.estimated_busy_time(time)}
