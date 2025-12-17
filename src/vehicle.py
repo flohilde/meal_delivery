@@ -1,5 +1,6 @@
-from typing import Tuple
 import numpy as np
+from typing import Tuple
+
 
 class Stop:
     r"""
@@ -41,7 +42,7 @@ class Stop:
     def __init__(self, stop_type: str, origin: int, destination: int, restaurant_id: str or None, customer_id: str or None,
                  start_at: int, estimated_travel_time: int or None, actual_travel_time: int or None,
                  estimated_park_time: int or None, actual_park_time: int or None, estimated_wait_time: int or None,
-                 actual_wait_time: int or None, orders_to_pickup: list or None, eta: int or None):
+                 actual_wait_time: int or None, orders_to_pickup: list or None, orders_ready_time: list or None, eta: int or None):
 
         assert stop_type in ["pickup", "delivery", "relocation"]
         self.type = stop_type
@@ -63,6 +64,7 @@ class Stop:
         self.eta_ub = eta
         self.order_estimated_ready_time = None
         self.order_ready_time_sigma = None
+        self.orders_ready_time = orders_ready_time
 
     @property
     def estimated_total_time(self):
@@ -99,6 +101,7 @@ class Stop:
                 "orders_to_pickup": self.orders_to_pickup,
                 "order_estimated_ready_time": self.order_estimated_ready_time,
                 "order_ready_time_sigma": self.order_ready_time_sigma,
+                "orders_ready_time": self.orders_ready_time,
         }
 
 
