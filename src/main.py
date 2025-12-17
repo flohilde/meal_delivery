@@ -19,6 +19,7 @@ def run(config, n_episodes=1, weights=[1.0, 1.0, 1.0], buffer=0, mode="ulmer", f
 
     #results = []
     vehicle_results = []
+    vehicle_profile = np.zeros(1440)
 
     for i in range(0, n_episodes):
 
@@ -78,6 +79,7 @@ def run(config, n_episodes=1, weights=[1.0, 1.0, 1.0], buffer=0, mode="ulmer", f
                     row = [i, vehicle.id, vehicle.total_travel_time,
                            vehicle.total_busy_time, env.time - vehicle.total_busy_time]
                     vehicle_results.append(row)
+                    vehicle_profile = vehicle_profile + vehicle.busy_profile
 
                 summary = [i, env.mean_delay, env.mean_freshness, env.mean_sync_delay]
                 print("Episode; {}; Mean delay; {}; Mean freshness; {}; Mean Sync-Delay; {}".format(*summary))
@@ -110,6 +112,19 @@ def run(config, n_episodes=1, weights=[1.0, 1.0, 1.0], buffer=0, mode="ulmer", f
             int(force_synchro),
             buffer, mode),
         vehicle_results)
+
+    np.save(
+        "../results/vehicle_info/profiles_iowa_40_40_{}_{}_n_{}_p_{}_alpha_{}_beta_{}_gamma_{}_forcesync_{}_buffer_{}_mode_{}_sorted".format(
+            int(env.n_lunch_mu),
+            int(env.n_dinner_mu),
+            env.multi_order_n,
+            str(env.multi_order_p).replace(".", "_"),
+            str(weights[0]).replace(".", "_"),
+            str(weights[1]).replace(".", "_"),
+            str(weights[2]).replace(".", "_"),
+            int(force_synchro),
+            buffer, mode),
+        vehicle_profile)
 
 
 if __name__ == "__main__":
