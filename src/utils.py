@@ -31,27 +31,33 @@ def stop_to_array(stop, vehicle_capacity=5):
             arr_stop.append(int(stop["orders_to_pickup"][i][2:]))
         else:
             arr_stop.append(-1)
+    for i in range(vehicle_capacity):
+        if i < n:
+            arr_stop.append(int(stop["orders_ready_time"][i]))
+        else:
+            arr_stop.append(-1)
     return tuple(arr_stop)
 
 
 def array_to_stop(stop_arr, vehicle_capacity=5):
     stop = {
-            "type": rev_type_dict[stop_arr["type"]],
-            "origin": stop_arr["origin"],
-            "destination": stop_arr["destination"],
-            "restaurant_id": "r_{}".format(stop_arr["restaurant_id"]) if stop_arr["restaurant_id"] != -1 else None,
-            "customer_id": "c_{}".format(stop_arr["customer_id"]) if stop_arr["customer_id"] != -1 else None,
-            "start_at": stop_arr["start_at"],
-            "started_at": stop_arr["started_at"] if stop_arr["started_at"] != -1 else None,
-            "estimated_time_required": stop_arr["estimated_time_required"],
-            "orders_to_pickup": [],
-            "order_estimated_ready_time": stop_arr["order_estimated_ready_time"]
-            if stop_arr["order_estimated_ready_time"] != -1 else None,
-            "order_ready_time_sigma": stop_arr["order_ready_time_sigma"]
-            if stop_arr["order_ready_time_sigma"] != -1 else None,
-            "eta": stop_arr["eta"],
-            "eta_lb": stop_arr["eta_lb"],
-            "eta_ub": stop_arr["eta_ub"],
+        "type": rev_type_dict[stop_arr["type"]],
+        "origin": stop_arr["origin"],
+        "destination": stop_arr["destination"],
+        "restaurant_id": "r_{}".format(stop_arr["restaurant_id"]) if stop_arr["restaurant_id"] != -1 else None,
+        "customer_id": "c_{}".format(stop_arr["customer_id"]) if stop_arr["customer_id"] != -1 else None,
+        "start_at": stop_arr["start_at"],
+        "started_at": stop_arr["started_at"] if stop_arr["started_at"] != -1 else None,
+        "estimated_time_required": stop_arr["estimated_time_required"],
+        "orders_to_pickup": [],
+        "orders_ready_time": [],
+        "order_estimated_ready_time": stop_arr["order_estimated_ready_time"]
+        if stop_arr["order_estimated_ready_time"] != -1 else None,
+        "order_ready_time_sigma": stop_arr["order_ready_time_sigma"]
+        if stop_arr["order_ready_time_sigma"] != -1 else None,
+        "eta": stop_arr["eta"],
+        "eta_lb": stop_arr["eta_lb"],
+        "eta_ub": stop_arr["eta_ub"],
 
     }
     for i in range(vehicle_capacity):
@@ -59,6 +65,12 @@ def array_to_stop(stop_arr, vehicle_capacity=5):
             stop["orders_to_pickup"].append("c_{}".format(stop_arr["orders_to_pickup_{}".format(i)]))
     if not stop["orders_to_pickup"]:
         stop["orders_to_pickup"] = None
+
+    for i in range(vehicle_capacity):
+        if stop_arr["orders_ready_time_{}".format(i)] != -1:
+            stop["orders_ready_time"].append(int(stop_arr["orders_ready_time_{}".format(i)]))
+    if not stop["orders_ready_time"]:
+        stop["orders_ready_time"] = None
 
     if stop["type"] == "pickup" and stop["orders_to_pickup"] is None:
         raise Warning("Pickup-stop but nothing to pickup.")
@@ -84,9 +96,12 @@ def route_to_array(route, vehicle_capacity=5):
     ]
     for i in range(vehicle_capacity):
         stop_struct.append(('orders_to_pickup_{}'.format(i), 'i4'))
+    for i in range(vehicle_capacity):
+        stop_struct.append(('orders_ready_time_{}'.format(i), 'i4'))
 
-    return {v_key: np.array([stop_to_array(stop, vehicle_capacity=vehicle_capacity) for stop in trip], dtype=stop_struct)
-            for v_key, trip in route.items()}
+    return {
+        v_key: np.array([stop_to_array(stop, vehicle_capacity=vehicle_capacity) for stop in trip], dtype=stop_struct)
+        for v_key, trip in route.items()}
 
 
 def array_to_route(route_arr, vehicle_capacity=5):
