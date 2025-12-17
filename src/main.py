@@ -75,7 +75,7 @@ def run(config, n_episodes=1, weights=[1.0, 1.0, 1.0], buffer=0, mode="ulmer", f
                     """
 
                 # Vehicle KPIs
-                for vehicle in env.vehicles:
+                for vehicle in env.vehicles.values():
                     row = [i, vehicle.id, vehicle.total_travel_time,
                            vehicle.total_busy_time, env.time - vehicle.total_busy_time]
                     vehicle_results.append(row)
