@@ -47,6 +47,7 @@ class Order:
         Returns a summary of the order as a dictionary.
         """
         return {"customer_id": self.customer_id,
+                "restaurant_id": self.restaurant_name,
                 "start_at": self.start_at,
                 "finished_at": self.finished_at,
                 "estimated_preparation_time": self.estimated_preparation_time}
