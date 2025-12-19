@@ -136,9 +136,8 @@ if __name__ == "__main__":
     config.read('../data/instances/multi_order/iowa_40_40_240_240.ini')
 
     for p in [0.15, 0.2, 0.25]:
-        #for weights in [[1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [1.0, 1.0, 0.0], [1.0, 0.0, 0.25],
-        #                [0.0, 1.0, 0.25], [1.0, 1.0, 0.25]]:
-        for weights in [[1.0, 0.0, 0.0]]:
+        for weights in [[1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [1.0, 1.0, 0.0], [1.0, 0.0, 0.25],
+                        [0.0, 1.0, 0.25], [1.0, 1.0, 0.25]]:
             #for demand in range(250, 370, 10):
                 #for buffer in list(range(0, 12, 2)):
             for buffer in [0]:

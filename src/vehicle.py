@@ -160,6 +160,7 @@ class Vehicle:
                     self.sequence_of_stops[0].started_at = _time
             _time = self.sequence_of_stops[0].started_at
             self.total_busy_time += self.sequence_of_stops[0].actual_total_time
+            print(_time, self.sequence_of_stops[0].actual_total_time)
             self.busy_profile[_time:_time+self.sequence_of_stops[0].actual_total_time] = 1
             _time += self.sequence_of_stops[0].actual_total_time
             if _time > time:
