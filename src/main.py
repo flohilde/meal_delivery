@@ -75,14 +75,13 @@ def run(config, n_episodes=1, weights=[1.0, 1.0, 1.0], buffer=0, mode="ulmer", f
                     """
 
                 # Vehicle KPIs
-                print(env.time)
                 _vehicle_profile = np.zeros(1440)
                 for vehicle in env.vehicles.values():
                     row = [i, int(vehicle.name[2:]), vehicle.total_travel_time,
                            vehicle.total_busy_time, (env.time-env.served_requests[0].order_time) - vehicle.total_busy_time]
                     vehicle_results.append(row)
                     _vehicle_profile = _vehicle_profile + vehicle.busy_profile
-                    vehicle_profile.append(_vehicle_profile)
+                vehicle_profile.append(_vehicle_profile)
 
                 summary = [i, env.mean_delay, env.mean_freshness, env.mean_sync_delay]
                 print("Episode; {}; Mean delay; {}; Mean freshness; {}; Mean Sync-Delay; {}".format(*summary))
